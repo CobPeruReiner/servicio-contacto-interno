@@ -51,13 +51,15 @@ function digits(value) {
 async function init() {
   await pool.query(`CREATE TABLE IF NOT EXISTS winners (
     id BIGSERIAL PRIMARY KEY, dni VARCHAR(12) UNIQUE NOT NULL, full_name TEXT NOT NULL, email TEXT NOT NULL, phone VARCHAR(30) NOT NULL,
-    province TEXT, district TEXT, store TEXT, store_address TEXT, delivery_status TEXT NOT NULL DEFAULT 'Pendiente de contacto',
+    address TEXT, department TEXT, province TEXT, district TEXT, store TEXT, store_address TEXT, delivery_status TEXT NOT NULL DEFAULT 'Pendiente de contacto',
     contact_verified BOOLEAN NOT NULL DEFAULT FALSE, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_by VARCHAR(12) NOT NULL DEFAULT 'sistema');
     CREATE INDEX IF NOT EXISTS idx_winners_dni ON winners(dni);
     CREATE TABLE IF NOT EXISTS contact_attempts (
       id BIGSERIAL PRIMARY KEY, winner_id BIGINT NOT NULL REFERENCES winners(id), attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       channel VARCHAR(20) NOT NULL, result TEXT NOT NULL, notes TEXT, created_by VARCHAR(12) NOT NULL);
-    CREATE INDEX IF NOT EXISTS idx_attempts_winner ON contact_attempts(winner_id, attempt_at);`);
+    CREATE INDEX IF NOT EXISTS idx_attempts_winner ON contact_attempts(winner_id, attempt_at);
+    ALTER TABLE winners ADD COLUMN IF NOT EXISTS address TEXT;
+    ALTER TABLE winners ADD COLUMN IF NOT EXISTS department TEXT;`);
   for (const row of winners)
     await pool.query(
       `INSERT INTO winners(dni,full_name,email,phone,updated_by) VALUES($1,$2,$3,$4,'sistema') ON CONFLICT(dni) DO NOTHING`,
@@ -125,11 +127,13 @@ app.put("/api/cases/:id", auth, async (req, res, next) => {
         .status(400)
         .json({ error: "Nombre, correo y teléfono son obligatorios" });
     await pool.query(
-      `UPDATE winners SET full_name=$1,email=$2,phone=$3,province=$4,district=$5,store=$6,store_address=$7,delivery_status=$8,contact_verified=$9,updated_at=NOW(),updated_by=$10 WHERE id=$11`,
+      `UPDATE winners SET full_name=$1,email=$2,phone=$3,address=$4,department=$5,province=$6,district=$7,store=$8,store_address=$9,delivery_status=$10,contact_verified=$11,updated_at=NOW(),updated_by=$12 WHERE id=$13`,
       [
         clean(b.fullName),
         clean(b.email),
         digits(b.phone),
+        clean(b.address),
+        clean(b.department),
         clean(b.province),
         clean(b.district),
         clean(b.store),
@@ -188,35 +192,16 @@ app.post("/api/cases/:id/attempts", auth, async (req, res, next) => {
   }
 });
 const prixHeaders = [
-  "SOLICITANTE",
-  "PEDIDO CLIENTE",
-  "TRATAMIENTO",
-  "EMPRESA",
-  "",
   "DIRECCIÓN",
   "País",
   "Departamento",
   "Provincia",
   "Distrito",
-  "CÓDIGO POSTAL",
-  "VIA PAGO",
-  "CONDICION DE PAGO",
   "TELEFONO",
   "TELEFONO MOVIL",
   "CORREO",
-  "TIPO DE ENVIO",
-  "SKU",
-  "CANTIDAD",
-  "Centro",
-  "Centro de Entrega",
-  "Código",
-  "TEXTO Cabecera",
-  "Centro se halla Costo",
   "Nombres",
   "DNI",
-  "Rango Horario",
-  "Fecha Entrega",
-  "Comentario",
   "Dirección de la tienda La Curacao o Efe más cercana",
 ];
 app.get("/api/export", auth, supervisor, async (_req, res, next) => {
@@ -227,40 +212,21 @@ app.get("/api/export", auth, supervisor, async (_req, res, next) => {
     (await pool.query("SELECT * FROM winners ORDER BY full_name")).rows.forEach(
       (w) =>
         sheet.addRow([
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
+          w.address,
           "Perú",
-          "",
+          w.department,
           w.province,
           w.district,
-          "",
-          "",
-          "",
           w.phone,
           w.phone,
           w.email,
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
           w.full_name,
           w.dni,
-          "",
-          "",
-          w.delivery_status,
           w.store_address || w.store,
         ]),
     );
     sheet.getRow(1).font = { bold: true };
-    sheet.columns.forEach((c) => (c.width = 20));
+    sheet.columns.forEach((c) => (c.width = 28));
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
