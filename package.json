@@ -1,0 +1,12 @@
+{
+  "name": "servicio-contacto-interno",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node app.js" },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  }
+}

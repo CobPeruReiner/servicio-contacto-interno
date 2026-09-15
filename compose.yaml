@@ -1,0 +1,29 @@
+services:
+  contacto:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "4008:4008"
+    environment:
+      DATABASE_URL: postgresql://contacto:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}@postgres:5432/contacto
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: contacto
+      POSTGRES_USER: contacto
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}
+    volumes:
+      - contacto_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contacto -d contacto"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+volumes:
+  contacto_postgres:
