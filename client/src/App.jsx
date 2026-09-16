@@ -1,0 +1,50 @@
+import { useEffect, useRef, useState } from "react";
+import { Button } from "primereact/button";
+import { Card } from "primereact/card";
+import { Checkbox } from "primereact/checkbox";
+import { Dialog } from "primereact/dialog";
+import { Divider } from "primereact/divider";
+import { Dropdown } from "primereact/dropdown";
+import { InputText } from "primereact/inputtext";
+import { Message } from "primereact/message";
+import { Panel } from "primereact/panel";
+import { Tag } from "primereact/tag";
+import { Toast } from "primereact/toast";
+import { api } from "./api";
+
+const statuses = ["Pendiente de contacto", "En validación", "Validado", "No contactado - 3 intentos", "Disponible para recojo", "Entregado"];
+const digits = (value) => String(value || "").replace(/\D/g, "");
+
+export function App() {
+  const toast = useRef(null);
+  const [user, setUser] = useState(null);
+  const [loginDni, setLoginDni] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [dni, setDni] = useState("");
+  const [records, setRecords] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [attemptOpen, setAttemptOpen] = useState(false);
+  const [attempt, setAttempt] = useState({ channel: "Llamada", result: "Sin respuesta", notes: "" });
+  const notify = (severity, summary, detail) => toast.current?.show({ severity, summary, detail, life: 3800 });
+  const search = async (query = dni, preserve = true) => {
+    try {
+      const data = await api(`/api/cases?dni=${encodeURIComponent(digits(query))}`);
+      setRecords(data.records); setTotal(data.total);
+      if (preserve && selected) setSelected(data.records.find((row) => String(row.id) === String(selected.id)) || null);
+    } catch (error) { notify("error", "Búsqueda no disponible", error.message); }
+  };
+  useEffect(() => { api("/api/me").then(setUser).then(() => search("", false)).catch(() => {}); }, []);
+  const login = async (event) => { event.preventDefault(); try { const current = await api("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dni: digits(loginDni) }) }); setUser(current); setLoginError(""); await search("", false); } catch (error) { setLoginError(error.message); } };
+  const logout = async () => { await api("/api/logout", { method: "POST" }); setUser(null); setRecords([]); setSelected(null); setDni(""); };
+  const patch = (key, value) => setSelected((current) => ({ ...current, [key]: value }));
+  const save = async () => { try { await api(`/api/cases/${selected.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fullName: selected.full_name, email: selected.email, phone: selected.phone, address: selected.address, department: selected.department, province: selected.province, district: selected.district, store: selected.store, storeAddress: selected.store_address, deliveryStatus: selected.delivery_status, contactVerified: selected.contact_verified }) }); notify("success", "Gestión guardada", "Los datos del ganador fueron actualizados."); await search(dni); } catch (error) { notify("error", "No se pudo guardar", error.message); } };
+  const saveAttempt = async () => { try { await api(`/api/cases/${selected.id}/attempts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(attempt) }); setAttemptOpen(false); setAttempt({ channel: "Llamada", result: "Sin respuesta", notes: "" }); notify("success", "Intento registrado", "El historial del caso fue actualizado."); await search(dni); } catch (error) { notify("error", "No se pudo registrar", error.message); } };
+  if (!user) return <Login dni={loginDni} setDni={setLoginDni} onSubmit={login} error={loginError} />;
+  return <div className="app-shell"><Toast ref={toast} /><header className="topbar"><div><span className="brand">RIMAC × EFECTIBANK</span><h1>Gestión de ganadores</h1></div><div className="topbar-actions"><Tag value={user.role === "supervisor" ? "SUPERVISOR" : "GESTOR"} severity={user.role === "supervisor" ? "info" : "secondary"} />{user.role === "supervisor" && <Button label="Exportar PRIX" icon="pi pi-file-excel" outlined onClick={() => { window.location.href = "/api/export"; }} />}<Button label="Salir" icon="pi pi-sign-out" text onClick={logout} /></div></header><main className="workspace"><Card className="search-card"><form className="search-row" onSubmit={(event) => { event.preventDefault(); search(); }}><span className="p-float-label grow"><InputText id="winner-dni" value={dni} onChange={(event) => setDni(digits(event.target.value))} keyfilter="int" maxLength={8} autoFocus /><label htmlFor="winner-dni">Buscar ganador por DNI</label></span><Button type="submit" label="Buscar" icon="pi pi-search" /><span className="total">{total} ganadores</span></form></Card><div className="content-grid"><Panel header="Resultados" className="result-panel"><Results records={records} selected={selected} onSelect={setSelected} /></Panel><Card className="case-card"><CaseForm winner={selected} patch={patch} save={save} openAttempt={() => setAttemptOpen(true)} /></Card></div></main><Dialog header="Registrar intento de contacto" visible={attemptOpen} style={{ width: "min(34rem, 92vw)" }} onHide={() => setAttemptOpen(false)} footer={<div><Button label="Cancelar" text onClick={() => setAttemptOpen(false)} /><Button label="Registrar" icon="pi pi-check" onClick={saveAttempt} /></div>}><div className="dialog-fields"><Field label="Canal"><Dropdown value={attempt.channel} options={["Llamada", "Correo", "SMS"]} onChange={(event) => setAttempt({ ...attempt, channel: event.value })} /></Field><Field label="Resultado"><InputText value={attempt.result} onChange={(event) => setAttempt({ ...attempt, result: event.target.value })} /></Field><Field label="Observación"><InputText value={attempt.notes} onChange={(event) => setAttempt({ ...attempt, notes: event.target.value })} /></Field></div></Dialog></div>;
+}
+
+function Login({ dni, setDni, onSubmit, error }) { return <div className="login-page"><Card className="login-card"><span className="brand">RIMAC × EFECTIBANK</span><h1>Gestión de ganadores</h1><p>Campaña Te queremos al 100</p><form onSubmit={onSubmit}><Field label="DNI del colaborador"><InputText value={dni} onChange={(event) => setDni(digits(event.target.value))} keyfilter="int" maxLength={9} autoFocus /></Field>{error && <Message severity="error" text={error} /> }<Button label="Ingresar" icon="pi pi-sign-in" type="submit" /></form></Card></div>; }
+function Results({ records, selected, onSelect }) { if (!records.length) return <p className="empty">Ingrese el DNI de un ganador y presione Buscar.</p>; return <div className="result-list">{records.map((record) => <button key={record.id} className={`result-item ${String(selected?.id) === String(record.id) ? "selected" : ""}`} onClick={() => onSelect(record)}><strong>{record.full_name}</strong><span>DNI {record.dni} · {record.delivery_status}</span><Tag value={`${record.attempts.length}/3`} severity={record.attempts.length >= 3 ? "danger" : "info"} /></button>)}</div>; }
+function Field({ label, children }) { return <label className="field"><span>{label}</span>{children}</label>; }
+function CaseForm({ winner, patch, save, openAttempt }) { if (!winner) return <div className="empty case-empty"><i className="pi pi-search" /><p>Busca y selecciona un ganador para registrar la gestión.</p></div>; return <div className="case-form"><div className="case-heading"><div><span className="brand">VALIDACIÓN DEL GANADOR</span><h2>DNI {winner.dni}</h2></div><Tag value={`${winner.attempts.length} de 3 intentos`} severity={winner.attempts.length >= 3 ? "danger" : "info"} /></div><div className="form-grid"><Field label="Nombre completo"><InputText value={winner.full_name || ""} onChange={(event) => patch("full_name", event.target.value)} /></Field><Field label="Correo"><InputText value={winner.email || ""} onChange={(event) => patch("email", event.target.value)} /></Field><Field label="Teléfono móvil"><InputText value={winner.phone || ""} keyfilter="int" onChange={(event) => patch("phone", digits(event.target.value))} /></Field><Field label="Dirección"><InputText value={winner.address || ""} onChange={(event) => patch("address", event.target.value)} /></Field><Field label="Departamento"><InputText value={winner.department || ""} onChange={(event) => patch("department", event.target.value)} /></Field><Field label="Provincia"><InputText value={winner.province || ""} onChange={(event) => patch("province", event.target.value)} /></Field><Field label="Distrito"><InputText value={winner.district || ""} onChange={(event) => patch("district", event.target.value)} /></Field><Field label="Tienda EFE o La Curacao"><InputText value={winner.store || ""} onChange={(event) => patch("store", event.target.value)} /></Field><Field label="Dirección de tienda"><InputText value={winner.store_address || ""} onChange={(event) => patch("store_address", event.target.value)} /></Field><Field label="Estado final"><Dropdown value={winner.delivery_status} options={statuses} onChange={(event) => patch("delivery_status", event.value)} /></Field></div><div className="checkline"><Checkbox inputId="verified" checked={Boolean(winner.contact_verified)} onChange={(event) => patch("contact_verified", event.checked)} /><label htmlFor="verified">Datos confirmados con el ganador</label></div><div className="form-actions"><Button label="Guardar gestión" icon="pi pi-save" onClick={save} /><Button label="Registrar intento" icon="pi pi-phone" outlined disabled={winner.attempts.length >= 3} onClick={openAttempt} /></div><Divider /><h3>Historial de intentos</h3>{winner.attempts.length ? <ul className="history">{winner.attempts.map((attempt) => <li key={attempt.id}><strong>{new Date(attempt.attempt_at).toLocaleString("es-PE")}</strong><span>{attempt.channel}: {attempt.result}</span>{attempt.notes && <small>{attempt.notes}</small>}</li>)}</ul> : <p className="empty">Aún no hay intentos registrados.</p>}</div>; }
