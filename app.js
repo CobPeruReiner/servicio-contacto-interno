@@ -247,6 +247,49 @@ app.get("/api/export", auth, supervisor, async (_req, res, next) => {
     next(e);
   }
 });
+app.get("/api/export/attempts", auth, supervisor, async (_req, res, next) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Intentos");
+    sheet.addRow([
+      "Fecha y hora",
+      "DNI",
+      "Nombres",
+      "Canal",
+      "Resultado",
+      "Observación",
+      "Registrado por",
+    ]);
+    const attempts = await pool.query(
+      `SELECT a.attempt_at,w.dni,w.full_name,a.channel,a.result,a.notes,a.created_by
+       FROM contact_attempts a
+       JOIN winners w ON w.id=a.winner_id
+       ORDER BY a.attempt_at DESC`,
+    );
+    attempts.rows.forEach((attempt) =>
+      sheet.addRow([
+        attempt.attempt_at,
+        attempt.dni,
+        attempt.full_name,
+        attempt.channel,
+        attempt.result,
+        attempt.notes,
+        attempt.created_by,
+      ]),
+    );
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFB21E22" } };
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.columns.forEach((column) => (column.width = 24));
+    sheet.getColumn(1).numFmt = "dd/mm/yyyy hh:mm";
+    sheet.autoFilter = "A1:G1";
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=Reporte_de_intentos.xlsx");
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (e) {
+    next(e);
+  }
+});
 app.use(express.static("public"));
 app.use((err, _req, res, _next) => {
   console.error(err);

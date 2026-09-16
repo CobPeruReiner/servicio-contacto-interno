@@ -170,7 +170,6 @@ body { min-width: 320px; margin: 0; background: #faf9f9; }
   .search-form .p-button .p-button-label, .export-button .p-button-label { display: none; }
   .search-hint, .search-card .field-error { margin-left: 0; }
   .case-card { padding: 1.2rem; }
-  .case-hero > .p-tag { align-self: flex-start; }
   .winner-identity h2 { white-space: normal; font-size: 1.05rem; }
   .attempt-summary { grid-template-columns: 1fr; gap: .45rem; }
   .attempt-summary > .limit, .attempt-summary > .reached { white-space: normal; }
