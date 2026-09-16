@@ -25,7 +25,7 @@ body { min-width: 320px; margin: 0; background: #faf9f9; }
 .brand-title { font-size: 1.05rem; font-weight: 700; }
 .header-actions, .user-chip { display: flex; align-items: center; gap: .7rem; }
 .user-chip { padding: .28rem .65rem .28rem .3rem; border: 1px solid rgba(255,255,255,.2); border-radius: 999px; font-size: .82rem; }
-.user-chip .p-avatar { width: 1.65rem; height: 1.65rem; color: var(--cp-red-dark); background: #f6dddd; font-size: .7rem; font-weight: 800; }
+.user-chip > i { display: grid; width: 1.65rem; height: 1.65rem; color: var(--cp-red-dark); background: #f6dddd; border-radius: 50%; font-size: .7rem; place-items: center; }
 .export-button.p-button { color: #fff; border-color: #f1d0d0; }
 .export-button.p-button:hover { color: #fff; background: #4a4948; border-color: #fff; }
 .logout-button.p-button { color: #fff; }

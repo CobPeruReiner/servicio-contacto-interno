@@ -51,7 +51,7 @@ function digits(value) {
 async function init() {
   await pool.query(`CREATE TABLE IF NOT EXISTS winners (
     id BIGSERIAL PRIMARY KEY, dni VARCHAR(12) UNIQUE NOT NULL, full_name TEXT NOT NULL, email TEXT NOT NULL, phone VARCHAR(30) NOT NULL,
-    address TEXT, department TEXT, province TEXT, district TEXT, store TEXT, store_address TEXT, delivery_status TEXT NOT NULL DEFAULT 'Pendiente de contacto',
+    address TEXT, department TEXT, province TEXT, district TEXT, store TEXT, store_address TEXT, observation TEXT, delivery_status TEXT NOT NULL DEFAULT 'Pendiente de contacto',
     contact_verified BOOLEAN NOT NULL DEFAULT FALSE, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_by VARCHAR(12) NOT NULL DEFAULT 'sistema');
     CREATE INDEX IF NOT EXISTS idx_winners_dni ON winners(dni);
     CREATE TABLE IF NOT EXISTS contact_attempts (
@@ -59,7 +59,8 @@ async function init() {
       channel VARCHAR(20) NOT NULL, result TEXT NOT NULL, notes TEXT, created_by VARCHAR(12) NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_attempts_winner ON contact_attempts(winner_id, attempt_at);
     ALTER TABLE winners ADD COLUMN IF NOT EXISTS address TEXT;
-    ALTER TABLE winners ADD COLUMN IF NOT EXISTS department TEXT;`);
+    ALTER TABLE winners ADD COLUMN IF NOT EXISTS department TEXT;
+    ALTER TABLE winners ADD COLUMN IF NOT EXISTS observation TEXT;`);
   for (const row of winners)
     await pool.query(
       `INSERT INTO winners(dni,full_name,email,phone,updated_by) VALUES($1,$2,$3,$4,'sistema') ON CONFLICT(dni) DO NOTHING`,
@@ -127,7 +128,7 @@ app.put("/api/cases/:id", auth, async (req, res, next) => {
         .status(400)
         .json({ error: "Nombre, correo y teléfono son obligatorios" });
     await pool.query(
-      `UPDATE winners SET full_name=$1,email=$2,phone=$3,address=$4,department=$5,province=$6,district=$7,store=$8,store_address=$9,delivery_status=$10,contact_verified=$11,updated_at=NOW(),updated_by=$12 WHERE id=$13`,
+      `UPDATE winners SET full_name=$1,email=$2,phone=$3,address=$4,department=$5,province=$6,district=$7,store=$8,store_address=$9,observation=$10,delivery_status=$11,contact_verified=$12,updated_at=NOW(),updated_by=$13 WHERE id=$14`,
       [
         clean(b.fullName),
         clean(b.email),
@@ -138,6 +139,7 @@ app.put("/api/cases/:id", auth, async (req, res, next) => {
         clean(b.district),
         clean(b.store),
         clean(b.storeAddress),
+        clean(b.observation, 500),
         status,
         Boolean(b.contactVerified),
         req.user.dni,
@@ -171,6 +173,10 @@ app.post("/api/cases/:id/attempts", auth, async (req, res, next) => {
       return res
         .status(400)
         .json({ error: "Canal y resultado son obligatorios" });
+    }
+    if (!new Set(["Contacto con titular", "Contacto con tercero", "No contacto"]).has(result)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Resultado de contacto no válido" });
     }
     await client.query(
       "INSERT INTO contact_attempts(winner_id,channel,result,notes,created_by) VALUES($1,$2,$3,$4,$5)",
