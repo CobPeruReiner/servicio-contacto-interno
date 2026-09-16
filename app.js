@@ -48,6 +48,23 @@ function clean(value, max = 300) {
 function digits(value) {
   return String(value ?? "").replace(/\D/g, "");
 }
+function limaDateTime(value) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("es-PE", {
+      timeZone: "America/Lima",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(new Date(value))
+      .filter(({ type }) => type !== "literal")
+      .map(({ type, value: part }) => [type, part]),
+  );
+  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+}
 async function init() {
   await pool.query(`CREATE TABLE IF NOT EXISTS winners (
     id BIGSERIAL PRIMARY KEY, dni VARCHAR(12) UNIQUE NOT NULL, full_name TEXT NOT NULL, email TEXT NOT NULL, phone VARCHAR(30) NOT NULL,
@@ -268,7 +285,7 @@ app.get("/api/export/attempts", auth, supervisor, async (_req, res, next) => {
     );
     attempts.rows.forEach((attempt) =>
       sheet.addRow([
-        attempt.attempt_at,
+        limaDateTime(attempt.attempt_at),
         attempt.dni,
         attempt.full_name,
         attempt.channel,
@@ -280,7 +297,6 @@ app.get("/api/export/attempts", auth, supervisor, async (_req, res, next) => {
     sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFB21E22" } };
     sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
     sheet.columns.forEach((column) => (column.width = 24));
-    sheet.getColumn(1).numFmt = "dd/mm/yyyy hh:mm";
     sheet.autoFilter = "A1:G1";
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", "attachment; filename=Reporte_de_intentos.xlsx");
