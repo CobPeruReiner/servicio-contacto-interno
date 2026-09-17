@@ -77,7 +77,8 @@ async function init() {
     CREATE INDEX IF NOT EXISTS idx_attempts_winner ON contact_attempts(winner_id, attempt_at);
     ALTER TABLE winners ADD COLUMN IF NOT EXISTS address TEXT;
     ALTER TABLE winners ADD COLUMN IF NOT EXISTS department TEXT;
-    ALTER TABLE winners ADD COLUMN IF NOT EXISTS observation TEXT;`);
+    ALTER TABLE winners ADD COLUMN IF NOT EXISTS observation TEXT;
+    UPDATE winners SET delivery_status='No contactado' WHERE delivery_status='No contactado - 3 intentos';`);
   for (const row of winners)
     await pool.query(
       `INSERT INTO winners(dni,full_name,email,phone,updated_by) VALUES($1,$2,$3,$4,'sistema') ON CONFLICT(dni) DO NOTHING`,
