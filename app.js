@@ -172,17 +172,6 @@ app.post("/api/cases/:id/attempts", auth, async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT id FROM winners WHERE id=$1 FOR UPDATE", [
-      Number(req.params.id),
-    ]);
-    const count = await client.query(
-      "SELECT COUNT(*)::int AS total FROM contact_attempts WHERE winner_id=$1",
-      [Number(req.params.id)],
-    );
-    if (count.rows[0].total >= 3) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "El caso ya tiene 3 intentos" });
-    }
     const channel = clean(req.body.channel, 20),
       result = clean(req.body.result, 200);
     if (!channel || !result) {
